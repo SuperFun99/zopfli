@@ -280,6 +280,7 @@ void ZopfliBlockSplit(const ZopfliOptions* options,
                       size_t maxblocks, size_t** splitpoints, size_t* npoints, SymbolStats** stats) {
   size_t pos = 0;
   size_t i;
+  size_t shift;
   ZopfliBlockState s;
   size_t* lz77splitpoints = 0;
   size_t nlz77points = 0;
@@ -325,7 +326,7 @@ void ZopfliBlockSplit(const ZopfliOptions* options,
       }
       pos += length;
     }
-    size_t shift = lz77splitpoints[*npoints - 1];
+    shift = lz77splitpoints[*npoints - 1];
     store.size -= shift;
     store.dists += shift;
     store.litlens += shift;
