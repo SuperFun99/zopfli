@@ -25,6 +25,7 @@
 #include <string.h>
 #include <set>
 #include <vector>
+#include <QDebug>
 
 #include "lodepng/lodepng.h"
 #include "lodepng/lodepng_util.h"
@@ -256,7 +257,7 @@ unsigned TryOptimize(
   }
 
   if (error) {
-    printf("Encoding error %u: %s\n", error, lodepng_error_text(error));
+    qDebug("Encoding error %u: %s\n", error, lodepng_error_text(error));
     return error;
   }
 
@@ -290,6 +291,7 @@ unsigned AutoChooseFilterStrategy(const std::vector<unsigned char>& image,
                                  origfile, strategies[i], false, windowsize, 0,
                                  &out);
     if (error) return error;
+    qDebug("%s - Strategy %i = %i bytes", __FUNCTION__, strategies[i], out.size());
     if (bestsize == 0 || out.size() < bestsize) {
       bestsize = out.size();
       bestfilter = i;
@@ -393,7 +395,7 @@ int ZopfliPNGOptimize(const std::vector<unsigned char>& origpng,
     ChunksToKeep(origpng, png_options.keepchunks, &keepchunks);
     keep_colortype = keepchunks.count("bKGD") || keepchunks.count("sBIT");
     if (keep_colortype && verbose) {
-      printf("Forced to keep original color type due to keeping bKGD or sBIT"
+      qDebug("Forced to keep original color type due to keeping bKGD or sBIT"
              " chunk.\n");
     }
   }
@@ -401,9 +403,9 @@ int ZopfliPNGOptimize(const std::vector<unsigned char>& origpng,
   if (error) {
     if (verbose) {
       if (error == 1) {
-        printf("Decoding error\n");
+        qDebug("Decoding error\n");
       } else {
-        printf("Decoding error %u: %s\n", error, lodepng_error_text(error));
+        qDebug("Decoding error %u: %s\n", error, lodepng_error_text(error));
       }
     }
     return error;
@@ -445,7 +447,7 @@ int ZopfliPNGOptimize(const std::vector<unsigned char>& origpng,
                           windowsize, &png_options, &temp);
       if (!error) {
         if (verbose) {
-          printf("Filter strategy %s: %d bytes\n",
+          qDebug("Filter strategy %s: %d bytes\n",
                  strategy_name[i].c_str(), (int) temp.size());
         }
         if (bestsize == 0 || temp.size() < bestsize) {
