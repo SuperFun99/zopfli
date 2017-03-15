@@ -222,8 +222,10 @@ unsigned TryOptimize(
       break;
   }
 
+#ifdef LODEPNG_COMPILE_ANCILLARY_CHUNKS
   state.encoder.add_id = false;
   state.encoder.text_compression = 1;
+#endif /*LODEPNG_COMPILE_ANCILLARY_CHUNKS*/
 
   error = lodepng::encode(*out, image, w, h, state);
 
