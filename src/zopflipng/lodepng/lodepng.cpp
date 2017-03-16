@@ -33,6 +33,7 @@ Rename this file to lodepng.cpp to use it for C++, or to lodepng.c to use it for
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <QDebug>
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1310) /*Visual Studio: A few warning types are not desired here.*/
 #pragma warning( disable : 4244 ) /*implicit conversions: not warned by gcc -Wall -Wextra and requires too much casts*/
@@ -5398,6 +5399,31 @@ static unsigned filter(unsigned char* out, const unsigned char* in, unsigned w, 
     for(type = 0; type != 5; ++type) lodepng_free(attempt[type]);
   }
   else return 88; /* unknown filter strategy */
+
+
+  // Print just row filters
+//  QString str;
+//  for (y = 0; y != h; y++)
+//  {
+//      str.append(' ');
+//      str += QString::number(out[(1 + linebytes) * y]);
+//  }
+//  qDebug("Filters are:%s", qPrintable(str));
+
+
+  // Print row filters and data
+  QString row;
+  qDebug("Data with filters (%i bytes per line):", linebytes);
+  for (y = 0; y != h; y++)
+  {
+      row = QString("%1 |").arg(out[(1 + linebytes) * y], 2, 16);
+      for (x = 0; x != linebytes; x++)
+      {
+        row += QString(" %1").arg(out[(1+linebytes)*y + x + 1], 2, 16);
+      }
+      qDebug("%s", qPrintable(row));
+  }
+
 
   return error;
 }

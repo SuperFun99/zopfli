@@ -31,6 +31,35 @@
 #include "lodepng/lodepng_util.h"
 #include "../zopfli/deflate.h"
 
+void dumpLodePngColorMode(const LodePNGColorMode & mode)
+{
+    switch (mode.colortype)
+    {
+    case LCT_GREY:
+        qDebug("Grayscale (no alpha) with %u %s per pixel", mode.bitdepth, (mode.bitdepth == 1) ? "bit" : "bits");
+        break;
+
+    case LCT_PALETTE:
+        qDebug("Palette color with bit depth of %u -- %i colors in palette", mode.bitdepth, mode.palettesize);
+        break;
+
+    case LCT_RGB:
+        qDebug("RGB (no alpha) with %u bits per channel = %i bits per pixel", mode.bitdepth, 3*mode.bitdepth);
+        break;
+
+    case LCT_GREY_ALPHA:
+        qDebug("Grayscale with alpha at %i bits per channel = %u bits per pixel", mode.bitdepth, 2*mode.bitdepth);
+        break;
+
+    case LCT_RGBA:
+        qDebug("RGBA at %u bits per channel = %u bits per pixel", mode.bitdepth, 4*mode.bitdepth);
+        break;
+
+    default:
+        qDebug("Unknown color mode (%i) and bit depth (%u)", mode.colortype, mode.bitdepth);
+    }
+}
+
 ZopfliPNGOptions::ZopfliPNGOptions()
   : verbose(false)
   , lossy_transparent(false)
@@ -243,7 +272,7 @@ unsigned TryOptimize(
       if (w * h <= 16 && profile.key) profile.alpha = 1;
       state.encoder.auto_convert = 0;
       state.info_png.color.colortype = (profile.alpha ? (profile.colored ? LCT_RGBA : LCT_GREY_ALPHA) : (profile.colored ? LCT_RGB : LCT_GREY));
-      state.info_png.color.bitdepth = 8;
+      state.info_png.color.bitdepth = (profile.alpha || profile.colored) ? 8 : profile.bits;
       state.info_png.color.key_defined = (profile.key && !profile.alpha);
       if (state.info_png.color.key_defined) {
         state.info_png.color.key_defined = 1;
@@ -254,7 +283,7 @@ unsigned TryOptimize(
 
       std::vector<unsigned char> out2;
       error = lodepng::encode(out2, image, w, h, state);
-      if (out2.size() < out->size()) out->swap(out2);
+      if (out2.size() < out->size())out->swap(out2);
     }
   }
 
@@ -278,8 +307,13 @@ unsigned AutoChooseFilterStrategy(const std::vector<unsigned char>& image,
                                   ZopfliPNGFilterStrategy* strategies,
                                   bool* enable) {
   std::vector<unsigned char> out;
+  std::vector<size_t> size;
   size_t bestsize = 0;
-  int bestfilter = 0;
+
+  std::string strategy_name[kNumFilterStrategies] = {
+    "none", "sub", "up", "average", "paeth",
+    "minimum sum", "entropy", "predefined", "brute force"
+  };
 
   // A large window size should still be used to do the quick compression to
   // try out filter strategies: which filter strategy is the best depends
@@ -293,15 +327,13 @@ unsigned AutoChooseFilterStrategy(const std::vector<unsigned char>& image,
                                  origfile, strategies[i], false, windowsize, 0,
                                  &out);
     if (error) return error;
-    qDebug("%s - Strategy %i = %i bytes", __FUNCTION__, strategies[i], out.size());
-    if (bestsize == 0 || out.size() < bestsize) {
-      bestsize = out.size();
-      bestfilter = i;
-    }
+    qDebug("%s - Strategy %12s = %i bytes", __FUNCTION__, strategy_name[strategies[i]].data(), out.size());
+    size.push_back(out.size());
+    if (bestsize == 0 || size[i] < bestsize) bestsize = size[i];
   }
 
   for (int i = 0; i < numstrategies; i++) {
-    enable[i] = (i == bestfilter);
+    enable[i] = (size[i] == bestsize);
   }
 
   return 0;  /* OK */
@@ -370,7 +402,7 @@ int ZopfliPNGOptimize(const std::vector<unsigned char>& origpng,
     false, false, false, false, false, false, false, false, false
   };
   std::string strategy_name[kNumFilterStrategies] = {
-    "zero", "one", "two", "three", "four",
+    "none", "sub", "up", "average", "paeth",
     "minimum sum", "entropy", "predefined", "brute force"
   };
   for (size_t i = 0; i < png_options.filter_strategies.size(); i++) {
