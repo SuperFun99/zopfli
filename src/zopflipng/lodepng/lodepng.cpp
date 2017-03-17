@@ -5400,82 +5400,77 @@ static unsigned filter(unsigned char* out, const unsigned char* in, unsigned w, 
   }
   else if (strategy == LFS_EXHAUSTIVE)
   {
-      /* Search all combinations of filters.  This is VERY slow O(5ⁿ) but will find the best filters. */
-      size_t nBytes = h*(linebytes + 1);
-      unsigned char * best = (unsigned char*) lodepng_malloc(nBytes);
-      unsigned char * attempt = (unsigned char*) lodepng_malloc(nBytes);
+      /* Search all combinations of filters.  This is VERY slow O(5ⁿ) but will find the best filter combination. */
 
+      // Create every filter for every row
+      size_t nBytes = h*(linebytes + 1);
+      unsigned char * filter[5] = {0};
+      unsigned char type;
+      for (type = 0; type < 5; type++)
+      {
+          filter[type] = (unsigned char*) lodepng_malloc(nBytes);
+          filter[type][0] = type;
+          for (y = 0; y < h; y++)
+              filterScanline(&filter[type][y*(linebytes + 1) + 1], &in[y*linebytes], (y > 0) ? &in[(y-1)*linebytes] : NULL, linebytes, bytewidth, type);
+      }
+
+
+      // zlib compression settings
       LodePNGCompressSettings zlibsettings = settings->zlibsettings;
       zlibsettings.btype = 1;
       zlibsettings.custom_zlib = 0;
       zlibsettings.custom_deflate = 0;
 
-      // First attempt is filter zero everywhere
-      size_t outIndex;
-      size_t inIndex;
-      for (y = 0; y < h; y++)
-      {
-          outIndex = y * (linebytes + 1);
-          inIndex  = y * linebytes;
-          best[outIndex] = 0;
-          filterScanline(&best[outIndex + 1], &in[inIndex], y > 0 ? &in[inIndex - linebytes] : NULL, linebytes, bytewidth, 0);
-      }
+      // Start with the filter zero for each row
+      unsigned char * attempt = (unsigned char*) lodepng_malloc(nBytes);
+      memcpy(attempt, filter[0], nBytes);
 
-      // Compress it
+      // Attempt every filter combination
       size_t bestSize = 0;
+      size_t outIndex;
+      size_t finalIndex = (h - 1)*(linebytes + 1);
       unsigned char* dummy = 0;
-      zlib_compress(&dummy, &bestSize, best, nBytes, &zlibsettings);
-      lodepng_free(dummy);
-      qDebug("Best size: %u", bestSize);
-
-      // Attempt every other filter combination
-      unsigned count = 1;
+      unsigned count = 0;
       size_t size = 0;
-      size_t finalIndex = (h-1)*(linebytes + 1);
       bool bDone = false;
-      memcpy(attempt, best, linebytes*h);
       do
       {
-          // Increment filters
+          // Compress
           count++;
+          dummy = 0;
+          size = 0;
+          zlib_compress(&dummy, &size, attempt, nBytes, &zlibsettings);
+          lodepng_free(dummy);
+          if ((bestSize == 0) || (size < bestSize))
+          {
+              bestSize = size;
+              memcpy(out, attempt, nBytes);
+              qDebug("New best size: %u", bestSize);
+          }
+
+          if (count % 50000 == 0)
+              qDebug("Finished with %i iterations", count);
+
+          // Increment the row filters
           outIndex = 0;
-          inIndex  = 0;
           attempt[outIndex] = (attempt[outIndex] + 1) % 5;
-          filterScanline(&attempt[outIndex+1], &in[inIndex], NULL, linebytes, bytewidth, attempt[outIndex]);
-          while ((!bDone) && (attempt[outIndex] == 0))
+          memcpy(&attempt[outIndex] + 1, &filter[attempt[outIndex]][outIndex] + 1, linebytes);
+          while ((outIndex < finalIndex) && (attempt[outIndex] == 0))
           {
               // Filter of previous line wrapped back to zero.  Increment filter of next line.
               outIndex += linebytes + 1;
-              inIndex  += linebytes;
               attempt[outIndex] = (attempt[outIndex] + 1) % 5;
               bDone = (outIndex == finalIndex) && (attempt[outIndex] == 0);
               if (!bDone)
-                filterScanline(&attempt[outIndex+1], &in[inIndex], &in[inIndex-linebytes], linebytes, bytewidth, attempt[outIndex]);
-          }
-
-          if (!bDone)
-          {
-              // Compress
-              dummy = 0;
-              size = 0;
-              zlib_compress(&dummy, &size, attempt, nBytes, &zlibsettings);
-              lodepng_free(dummy);
-              if (size < bestSize)
-              {
-                  bestSize = size;
-                  memcpy(best, attempt, nBytes);
-                  qDebug("New best size: %u", bestSize);
-              }
-
-              if (count % 50000 == 0)
-                  qDebug("Finished with %i iterations", count);
+                  memcpy(&attempt[outIndex] + 1, &filter[attempt[outIndex]][outIndex] + 1, linebytes);
           }
       }
       while (!bDone);
       qDebug("Total iterations: %i", count);
-      memcpy(out, best, nBytes);
-      lodepng_free(best);
       lodepng_free(attempt);
+
+      for (type = 0; type < 5; type++)
+          lodepng_free(filter[type]);
   }
   else return 88; /* unknown filter strategy */
 
