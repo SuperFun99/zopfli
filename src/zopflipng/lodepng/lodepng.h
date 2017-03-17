@@ -551,7 +551,9 @@ typedef enum LodePNGFilterStrategy
   */
   LFS_BRUTE_FORCE,
   /*use predefined_filters buffer: you specify the filter type for each scanline*/
-  LFS_PREDEFINED
+  LFS_PREDEFINED,
+  /*search all combinations*/
+  LFS_EXHAUSTIVE
 } LodePNGFilterStrategy;
 
 /*Gives characteristics about the colors of the image, which helps decide which color model to use for encoding.

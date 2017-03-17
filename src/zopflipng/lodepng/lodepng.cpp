@@ -5398,31 +5398,110 @@ static unsigned filter(unsigned char* out, const unsigned char* in, unsigned w, 
     }
     for(type = 0; type != 5; ++type) lodepng_free(attempt[type]);
   }
+  else if (strategy == LFS_EXHAUSTIVE)
+  {
+      /* Search all combinations of filters.  This is VERY slow O(5ⁿ) but will find the best filters. */
+      size_t nBytes = h*(linebytes + 1);
+      unsigned char * best = (unsigned char*) lodepng_malloc(nBytes);
+      unsigned char * attempt = (unsigned char*) lodepng_malloc(nBytes);
+
+      LodePNGCompressSettings zlibsettings = settings->zlibsettings;
+      zlibsettings.btype = 1;
+      zlibsettings.custom_zlib = 0;
+      zlibsettings.custom_deflate = 0;
+
+      // First attempt is filter zero everywhere
+      size_t outIndex;
+      size_t inIndex;
+      for (y = 0; y < h; y++)
+      {
+          outIndex = y * (linebytes + 1);
+          inIndex  = y * linebytes;
+          best[outIndex] = 0;
+          filterScanline(&best[outIndex + 1], &in[inIndex], y > 0 ? &in[inIndex - linebytes] : NULL, linebytes, bytewidth, 0);
+      }
+
+      // Compress it
+      size_t bestSize = 0;
+      unsigned char* dummy = 0;
+      zlib_compress(&dummy, &bestSize, best, nBytes, &zlibsettings);
+      lodepng_free(dummy);
+      qDebug("Best size: %u", bestSize);
+
+      // Attempt every other filter combination
+      unsigned count = 1;
+      size_t size = 0;
+      size_t finalIndex = (h-1)*(linebytes + 1);
+      bool bDone = false;
+      memcpy(attempt, best, linebytes*h);
+      do
+      {
+          // Increment filters
+          count++;
+          outIndex = 0;
+          inIndex  = 0;
+          attempt[outIndex] = (attempt[outIndex] + 1) % 5;
+          filterScanline(&attempt[outIndex+1], &in[inIndex], NULL, linebytes, bytewidth, attempt[outIndex]);
+          while ((!bDone) && (attempt[outIndex] == 0))
+          {
+              // Filter of previous line wrapped back to zero.  Increment filter of next line.
+              outIndex += linebytes + 1;
+              inIndex  += linebytes;
+              attempt[outIndex] = (attempt[outIndex] + 1) % 5;
+              bDone = (outIndex == finalIndex) && (attempt[outIndex] == 0);
+              if (!bDone)
+                filterScanline(&attempt[outIndex+1], &in[inIndex], &in[inIndex-linebytes], linebytes, bytewidth, attempt[outIndex]);
+          }
+
+          if (!bDone)
+          {
+              // Compress
+              dummy = 0;
+              size = 0;
+              zlib_compress(&dummy, &size, attempt, nBytes, &zlibsettings);
+              lodepng_free(dummy);
+              if (size < bestSize)
+              {
+                  bestSize = size;
+                  memcpy(best, attempt, nBytes);
+                  qDebug("New best size: %u", bestSize);
+              }
+
+              if (count % 50000 == 0)
+                  qDebug("Finished with %i iterations", count);
+          }
+      }
+      while (!bDone);
+      qDebug("Total iterations: %i", count);
+      memcpy(out, best, nBytes);
+      lodepng_free(best);
+      lodepng_free(attempt);
+  }
   else return 88; /* unknown filter strategy */
 
 
   // Print just row filters
-//  QString str;
-//  for (y = 0; y != h; y++)
-//  {
-//      str.append(' ');
-//      str += QString::number(out[(1 + linebytes) * y]);
-//  }
-//  qDebug("Filters are:%s", qPrintable(str));
-
-
-  // Print row filters and data
-  QString row;
-  qDebug("Data with filters (%i bytes per line):", linebytes);
+  QString str;
   for (y = 0; y != h; y++)
   {
-      row = QString("%1 |").arg(out[(1 + linebytes) * y], 2, 16);
-      for (x = 0; x != linebytes; x++)
-      {
-        row += QString(" %1").arg(out[(1+linebytes)*y + x + 1], 2, 16);
-      }
-      qDebug("%s", qPrintable(row));
+      str.append(' ');
+      str += QString::number(out[(1 + linebytes) * y]);
   }
+  qDebug("Filters are:%s", qPrintable(str));
+
+
+//  // Print row filters and data
+//  QString row;
+//  qDebug("Data with filters (%i bytes per line):", linebytes);
+//  for (y = 0; y != h; y++)
+//  {
+//      row = QString("%1 |").arg(out[(1 + linebytes) * y], 2, 16);
+//      for (x = 0; x != linebytes; x++)
+//      {
+//        row += QString(" %1").arg(out[(1+linebytes)*y + x + 1], 2, 16);
+//      }
+//      qDebug("%s", qPrintable(row));
+//  }
 
 
   return error;

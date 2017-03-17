@@ -247,6 +247,9 @@ unsigned TryOptimize(
       state.encoder.filter_strategy = LFS_PREDEFINED;
       state.encoder.predefined_filters = &filters[0];
       break;
+  case kStrategyExhaustive:
+      state.encoder.filter_strategy = LFS_EXHAUSTIVE;
+      break;
     default:
       break;
   }
@@ -312,7 +315,8 @@ unsigned AutoChooseFilterStrategy(const std::vector<unsigned char>& image,
 
   std::string strategy_name[kNumFilterStrategies] = {
     "none", "sub", "up", "average", "paeth",
-    "minimum sum", "entropy", "predefined", "brute force"
+    "minimum sum", "entropy", "predefined", "brute force",
+    "exhaustive"
   };
 
   // A large window size should still be used to do the quick compression to
@@ -396,14 +400,16 @@ int ZopfliPNGOptimize(const std::vector<unsigned char>& origpng,
 
   ZopfliPNGFilterStrategy filterstrategies[kNumFilterStrategies] = {
     kStrategyZero, kStrategyOne, kStrategyTwo, kStrategyThree, kStrategyFour,
-    kStrategyMinSum, kStrategyEntropy, kStrategyPredefined, kStrategyBruteForce
+    kStrategyMinSum, kStrategyEntropy, kStrategyPredefined, kStrategyBruteForce,
+    kStrategyExhaustive
   };
   bool strategy_enable[kNumFilterStrategies] = {
-    false, false, false, false, false, false, false, false, false
+    false, false, false, false, false, false, false, false, false,false
   };
   std::string strategy_name[kNumFilterStrategies] = {
     "none", "sub", "up", "average", "paeth",
-    "minimum sum", "entropy", "predefined", "brute force"
+    "minimum sum", "entropy", "predefined", "brute force",
+    "exhaustive"
   };
   for (size_t i = 0; i < png_options.filter_strategies.size(); i++) {
     strategy_enable[png_options.filter_strategies[i]] = true;
@@ -463,8 +469,7 @@ int ZopfliPNGOptimize(const std::vector<unsigned char>& origpng,
     if (png_options.auto_filter_strategy) {
       error = AutoChooseFilterStrategy(image, w, h, inputstate, bit16,
                                        keep_colortype, origpng,
-                                       /* Don't try brute force */
-                                       kNumFilterStrategies - 1,
+                                       kNumFilterStrategies,
                                        filterstrategies, strategy_enable);
     }
   }
