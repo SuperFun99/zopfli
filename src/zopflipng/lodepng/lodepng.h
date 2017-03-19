@@ -553,7 +553,9 @@ typedef enum LodePNGFilterStrategy
   /*use predefined_filters buffer: you specify the filter type for each scanline*/
   LFS_PREDEFINED,
   /*search all combinations*/
-  LFS_EXHAUSTIVE
+  LFS_EXHAUSTIVE,
+  /*Use filters that give smallest Shannon entropy for entire image */
+  LFS_TOTAL_ENTROPY
 } LodePNGFilterStrategy;
 
 /*Gives characteristics about the colors of the image, which helps decide which color model to use for encoding.

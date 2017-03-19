@@ -44,6 +44,7 @@ enum ZopfliPNGFilterStrategy {
   kStrategyPredefined,
   kStrategyBruteForce,
   kStrategyExhaustive,
+  kStrategyTotalEntropy,
   kNumFilterStrategies /* Not a strategy but used for the size of this enum */
 };
 

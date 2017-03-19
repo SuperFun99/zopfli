@@ -33,6 +33,7 @@ Rename this file to lodepng.cpp to use it for C++, or to lodepng.c to use it for
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <cmath>
 #include <QDebug>
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1310) /*Visual Studio: A few warning types are not desired here.*/
@@ -5183,6 +5184,26 @@ static float flog2(float f)
   return result + 1.442695f * (f * f * f / 3 - 3 * f * f / 2 + 3 * f - 1.83333f);
 }
 
+double shannonEntropy(unsigned char * data, size_t dataSize)
+{
+    unsigned count[255] = {0};
+    size_t i;
+    for(i = 0; i < dataSize; ++i) ++count[data[i]];
+    const double ln2 = 0.69314718056;
+    double cost = 0;
+    for(i = 0; i < 255; ++i)
+    {
+      double p = (double) count[i] / dataSize;
+      cost += (count[i] == 0) ? 0 : -std::log(p)/ln2 * p;
+    }
+    return cost;
+}
+
+double costFx(unsigned char * data, size_t dataSize)
+{
+    return shannonEntropy(data, dataSize);
+}
+
 static unsigned filter(unsigned char* out, const unsigned char* in, unsigned w, unsigned h,
                        const LodePNGColorMode* info, const LodePNGEncoderSettings* settings)
 {
@@ -5445,7 +5466,7 @@ static unsigned filter(unsigned char* out, const unsigned char* in, unsigned w, 
           {
               bestSize = size;
               memcpy(out, attempt, nBytes);
-              qDebug("New best size: %u", bestSize);
+              qDebug("New best size: %lu", bestSize);
           }
 
           if (count % 50000 == 0)
@@ -5471,6 +5492,37 @@ static unsigned filter(unsigned char* out, const unsigned char* in, unsigned w, 
 
       for (type = 0; type < 5; type++)
           lodepng_free(filter[type]);
+  }
+  else if (strategy == LFS_TOTAL_ENTROPY)
+  {
+      /* Build filtered data one row at a time using the filter that provides the lowest Shannon entropy
+       * for the entire image through that row */
+      size_t outIndex;
+      size_t inIndex;
+      for (y = 0; y != h; ++y)
+      {
+          outIndex = y*(linebytes + 1);
+          inIndex  = y*linebytes;
+
+          // Try each filter on this row
+          double bestCost;
+          unsigned char bestType;
+          for (unsigned char type = 0; type < 5; ++type)
+          {
+              out[outIndex] = type;
+              filterScanline(&out[outIndex+1], &in[inIndex], (y > 0) ? &in[inIndex - linebytes] : NULL, linebytes, bytewidth, type);
+              double cost = costFx(out, (y+1)*(linebytes + 1));
+              if ((type == 0) || (cost < bestCost))
+              {
+                  bestCost = cost;
+                  bestType = type;
+              }
+          }
+
+          // Reapply the best filter
+          out[outIndex] = bestType;
+          filterScanline(&out[outIndex+1], &in[inIndex], (y > 0) ? &in[inIndex - linebytes] : NULL, linebytes, bytewidth, bestType);
+      }
   }
   else return 88; /* unknown filter strategy */
 
