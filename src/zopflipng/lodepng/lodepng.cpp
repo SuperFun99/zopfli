@@ -5186,12 +5186,12 @@ static float flog2(float f)
 
 double shannonEntropy(unsigned char * data, size_t dataSize)
 {
-    unsigned count[255] = {0};
+    unsigned count[256] = {0};
     size_t i;
     for(i = 0; i < dataSize; ++i) ++count[data[i]];
     const double ln2 = 0.69314718056;
     double cost = 0;
-    for(i = 0; i < 255; ++i)
+    for(i = 0; i < 256; ++i)
     {
       double p = (double) count[i] / dataSize;
       cost += (count[i] == 0) ? 0 : -std::log(p)/ln2 * p;
@@ -5509,6 +5509,8 @@ static unsigned filter(unsigned char* out, const unsigned char* in, unsigned w, 
   else if (strategy == LFS_TOTAL_ENTROPY)
   {
       /* Choose filter for row n that minimizes entropy for rows 1 to n. */
+      const float ln2 = 0.69314718056;
+      unsigned count[256] = {0};
       size_t outIndex;
       size_t inIndex;
       for (y = 0; y != h; ++y)
@@ -5517,23 +5519,45 @@ static unsigned filter(unsigned char* out, const unsigned char* in, unsigned w, 
           inIndex  = y*linebytes;
 
           // Try each filter on this row
-          double bestCost;
-          unsigned char bestType;
-          for (unsigned char type = 0; type < 5; ++type)
+          double smallest;
+          unsigned bestType;
+          for (unsigned type = 0; type < 5; ++type)
           {
+              // Remove last attempt from count
+              if (type > 0)
+                  for (x = outIndex; x < outIndex + linebytes + 1; ++x) --count[out[x]];
+
               out[outIndex] = type;
               filterScanline(&out[outIndex+1], &in[inIndex], (y > 0) ? &in[inIndex - linebytes] : NULL, linebytes, bytewidth, type);
-              double cost = costFx(out, (y+1)*(linebytes + 1));
-              if ((type == 0) || (cost < bestCost))
+              for (x = outIndex; x < outIndex + linebytes + 1; ++x) ++count[out[x]];
+              double cost = 0;
+              size_t dataSize = ((y+1)*(linebytes + 1));
+              for (x = 0; x != 256; ++x)
               {
-                  bestCost = cost;
+                double p = (double) count[x] / dataSize;
+                cost += count[x] == 0 ? 0 : -std::log(p)/ln2 * p;
+              }
+              double total = costFx(out, (y+1)*(linebytes+1));
+              double diff = cost - total;
+              if ((diff > .01) || (diff < -.01))
+                qDebug("Costs: %g vs %g (diff = %g)", cost, total, cost-total);
+              if ((type == 0) || (cost < smallest))
+              {
+                  smallest = cost;
                   bestType = type;
               }
           }
 
-          // Reapply the best filter
-          out[outIndex] = bestType;
-          filterScanline(&out[outIndex+1], &in[inIndex], (y > 0) ? &in[inIndex - linebytes] : NULL, linebytes, bytewidth, bestType);
+          if (bestType != 4)
+          {
+              // Remove last attempt from count
+              for (x = outIndex; x < outIndex + linebytes + 1; ++x) --count[out[x]];
+
+              // Reapply the best filter
+              out[outIndex] = bestType;
+              filterScanline(&out[outIndex+1], &in[inIndex], (y > 0) ? &in[inIndex - linebytes] : NULL, linebytes, bytewidth, bestType);
+              for (x = outIndex; x < outIndex + linebytes + 1; ++x) ++count[out[x]];
+          }
       }
   }
   else if (strategy == LFS_PROGRESSIVE_BRUTE_FORCE)
@@ -5553,7 +5577,8 @@ static unsigned filter(unsigned char* out, const unsigned char* in, unsigned w, 
           {
               out[outIndex] = type;
               filterScanline(&out[outIndex+1], &in[inIndex], (y > 0) ? &in[inIndex - linebytes] : NULL, linebytes, bytewidth, type);
-              double cost = costFx2(out, (y+1)*(linebytes + 1), settings);
+//              double cost = costFx2(out, (y+1)*(linebytes + 1), settings);
+              double cost = costFx(out, (y+1)*(linebytes + 1));
               if ((type == 0) || (cost < bestCost))
               {
                   bestCost = cost;
