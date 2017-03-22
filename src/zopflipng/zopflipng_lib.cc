@@ -253,6 +253,9 @@ unsigned TryOptimize(
   case kStrategyTotalEntropy:
       state.encoder.filter_strategy = LFS_TOTAL_ENTROPY;
       break;
+  case kStrategyProgressiveBruteForce:
+      state.encoder.filter_strategy = LFS_PROGRESSIVE_BRUTE_FORCE;
+      break;
     default:
       break;
   }
@@ -319,7 +322,7 @@ unsigned AutoChooseFilterStrategy(const std::vector<unsigned char>& image,
   std::string strategy_name[kNumFilterStrategies] = {
     "none", "sub", "up", "average", "paeth",
     "minimum sum", "entropy", "predefined", "brute force",
-    "exhaustive", "total entropy"
+    "exhaustive", "total entropy", "progressive brute force"
   };
 
   // A large window size should still be used to do the quick compression to
@@ -404,7 +407,7 @@ int ZopfliPNGOptimize(const std::vector<unsigned char>& origpng,
   ZopfliPNGFilterStrategy filterstrategies[kNumFilterStrategies] = {
     kStrategyZero, kStrategyOne, kStrategyTwo, kStrategyThree, kStrategyFour,
     kStrategyMinSum, kStrategyEntropy, kStrategyPredefined, kStrategyBruteForce,
-    kStrategyExhaustive, kStrategyTotalEntropy
+    kStrategyExhaustive, kStrategyTotalEntropy, kStrategyProgressiveBruteForce
   };
   bool strategy_enable[kNumFilterStrategies] = {
     false, false, false, false, false, false, false, false, false,false
@@ -412,7 +415,7 @@ int ZopfliPNGOptimize(const std::vector<unsigned char>& origpng,
   std::string strategy_name[kNumFilterStrategies] = {
     "none", "sub", "up", "average", "paeth",
     "minimum sum", "entropy", "predefined", "brute force",
-    "exhaustive", "total entropy"
+    "exhaustive", "total entropy", "progressive brute force"
   };
   for (size_t i = 0; i < png_options.filter_strategies.size(); i++) {
     strategy_enable[png_options.filter_strategies[i]] = true;

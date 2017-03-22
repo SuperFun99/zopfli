@@ -5204,6 +5204,19 @@ double costFx(unsigned char * data, size_t dataSize)
     return shannonEntropy(data, dataSize);
 }
 
+double costFx2(unsigned char * data, size_t dataSize, const LodePNGEncoderSettings* settings)
+{
+    LodePNGCompressSettings zlibsettings = settings->zlibsettings;
+    zlibsettings.btype = 1;
+    zlibsettings.custom_zlib = 0;
+    zlibsettings.custom_deflate = 0;
+    size_t outSize = 0;
+    unsigned char * dummy = 0;
+    zlib_compress(&dummy, &outSize, data, dataSize, &zlibsettings);
+    lodepng_free(dummy);
+    return outSize;
+}
+
 static unsigned filter(unsigned char* out, const unsigned char* in, unsigned w, unsigned h,
                        const LodePNGColorMode* info, const LodePNGEncoderSettings* settings)
 {
@@ -5495,8 +5508,7 @@ static unsigned filter(unsigned char* out, const unsigned char* in, unsigned w, 
   }
   else if (strategy == LFS_TOTAL_ENTROPY)
   {
-      /* Build filtered data one row at a time using the filter that provides the lowest Shannon entropy
-       * for the entire image through that row */
+      /* Choose filter for row n that minimizes entropy for rows 1 to n. */
       size_t outIndex;
       size_t inIndex;
       for (y = 0; y != h; ++y)
@@ -5512,6 +5524,36 @@ static unsigned filter(unsigned char* out, const unsigned char* in, unsigned w, 
               out[outIndex] = type;
               filterScanline(&out[outIndex+1], &in[inIndex], (y > 0) ? &in[inIndex - linebytes] : NULL, linebytes, bytewidth, type);
               double cost = costFx(out, (y+1)*(linebytes + 1));
+              if ((type == 0) || (cost < bestCost))
+              {
+                  bestCost = cost;
+                  bestType = type;
+              }
+          }
+
+          // Reapply the best filter
+          out[outIndex] = bestType;
+          filterScanline(&out[outIndex+1], &in[inIndex], (y > 0) ? &in[inIndex - linebytes] : NULL, linebytes, bytewidth, bestType);
+      }
+  }
+  else if (strategy == LFS_PROGRESSIVE_BRUTE_FORCE)
+  {
+      /* Choose filter for row n that minimizes compressed size of rows 1 to n. */
+      size_t outIndex;
+      size_t inIndex;
+      for (y = 0; y != h; ++y)
+      {
+          outIndex = y*(linebytes + 1);
+          inIndex  = y*linebytes;
+
+          // Try each filter on this row
+          double bestCost;
+          unsigned char bestType;
+          for (unsigned char type = 0; type < 5; ++type)
+          {
+              out[outIndex] = type;
+              filterScanline(&out[outIndex+1], &in[inIndex], (y > 0) ? &in[inIndex - linebytes] : NULL, linebytes, bytewidth, type);
+              double cost = costFx2(out, (y+1)*(linebytes + 1), settings);
               if ((type == 0) || (cost < bestCost))
               {
                   bestCost = cost;

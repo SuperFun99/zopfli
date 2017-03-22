@@ -555,7 +555,9 @@ typedef enum LodePNGFilterStrategy
   /*search all combinations*/
   LFS_EXHAUSTIVE,
   /*Use filters that give smallest Shannon entropy for entire image */
-  LFS_TOTAL_ENTROPY
+  LFS_TOTAL_ENTROPY,
+  /*Brute force one scanline at a time*/
+  LFS_PROGRESSIVE_BRUTE_FORCE
 } LodePNGFilterStrategy;
 
 /*Gives characteristics about the colors of the image, which helps decide which color model to use for encoding.
