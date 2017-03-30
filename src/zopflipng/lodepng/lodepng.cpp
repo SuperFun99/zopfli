@@ -35,6 +35,7 @@ Rename this file to lodepng.cpp to use it for C++, or to lodepng.c to use it for
 #include <stdlib.h>
 #include <cmath>
 #include <QDebug>
+#include <QElapsedTimer>
 
 #if defined(_MSC_VER) && (_MSC_VER >= 1310) /*Visual Studio: A few warning types are not desired here.*/
 #pragma warning( disable : 4244 ) /*implicit conversions: not warned by gcc -Wall -Wextra and requires too much casts*/
@@ -5254,6 +5255,8 @@ static unsigned filter(unsigned char* out, const unsigned char* in, unsigned w, 
 
   if(bpp == 0) return 31; /*error: invalid color type*/
 
+  QElapsedTimer timer;
+  timer.start();
   if(strategy == LFS_ZERO)
   {
     for(y = 0; y != h; ++y)
@@ -5586,12 +5589,16 @@ static unsigned filter(unsigned char* out, const unsigned char* in, unsigned w, 
               }
           }
 
-          // Reapply the best filter
-          out[outIndex] = bestType;
-          filterScanline(&out[outIndex+1], &in[inIndex], (y > 0) ? &in[inIndex - linebytes] : NULL, linebytes, bytewidth, bestType);
+          if (bestType != 4)
+          {
+              // Reapply the best filter
+              out[outIndex] = bestType;
+              filterScanline(&out[outIndex+1], &in[inIndex], (y > 0) ? &in[inIndex - linebytes] : NULL, linebytes, bytewidth, bestType);
+          }
       }
   }
   else return 88; /* unknown filter strategy */
+  qDebug("Filters selected and applied in %.2f ms", timer.nsecsElapsed()/1000000.0);
 
 
   // Print just row filters
