@@ -25,6 +25,8 @@
 #include <string.h>
 #include <set>
 #include <vector>
+#include <QElapsedTimer>
+#include "MAcuityContent.h"
 
 #include "lodepng/lodepng.h"
 #include "lodepng/lodepng_util.h"
@@ -436,30 +438,36 @@ int ZopfliPNGOptimize(const std::vector<unsigned char>& origpng,
   }
 
   if (!error) {
-    size_t bestsize = 0;
+      size_t bestsize = 0;
+      int bestStrategy = 0;
+      QElapsedTimer timer;
 
-    for (int i = 0; i < kNumFilterStrategies; i++) {
-      if (!strategy_enable[i]) continue;
+      for (int i = 0; i < kNumFilterStrategies; i++) {
+          if (!strategy_enable[i]) continue;
 
-      std::vector<unsigned char> temp;
-      error = TryOptimize(image, w, h, inputstate, bit16, keep_colortype,
-                          origpng, filterstrategies[i], true /* use_zopfli */,
-                          windowsize, &png_options, &temp);
-      if (!error) {
-        if (verbose) {
-          printf("Filter strategy %s: %d bytes\n",
-                 strategy_name[i].c_str(), (int) temp.size());
-        }
-        if (bestsize == 0 || temp.size() < bestsize) {
-          bestsize = temp.size();
-          (*resultpng).swap(temp);  // Store best result so far in the output.
-        }
+          std::vector<unsigned char> temp;
+          timer.start();
+          error = TryOptimize(image, w, h, inputstate, bit16, keep_colortype,
+                              origpng, filterstrategies[i], true /* use_zopfli */,
+                              windowsize, &png_options, &temp);
+          if (!error) {
+              MAcuityContent::addFilterResults(i, (int) temp.size(), timer.elapsed());
+              if (verbose) {
+                  printf("Filter strategy %s: %d bytes\n",
+                         strategy_name[i].c_str(), (int) temp.size());
+              }
+              if (bestsize == 0 || temp.size() < bestsize) {
+                  bestStrategy = i;
+                  bestsize = temp.size();
+                  (*resultpng).swap(temp);  // Store best result so far in the output.
+              }
+          }
       }
-    }
+      MAcuityContent::incrementWinningFilterStrategy(bestStrategy);
 
-    if (!png_options.keepchunks.empty()) {
-      KeepChunks(origpng, png_options.keepchunks, resultpng);
-    }
+      if (!png_options.keepchunks.empty()) {
+          KeepChunks(origpng, png_options.keepchunks, resultpng);
+      }
   }
 
   return error;
