@@ -451,13 +451,13 @@ int ZopfliPNGOptimize(const std::vector<unsigned char>& origpng,
                               origpng, filterstrategies[i], true /* use_zopfli */,
                               windowsize, &png_options, &temp);
           if (!error) {
-              MAcuityContent::addFilterResults(i, (int) temp.size(), timer.elapsed());
+              MAcuityContent::addFilterResults(filterstrategies[i], (int) temp.size(), timer.nsecsElapsed());
               if (verbose) {
                   printf("Filter strategy %s: %d bytes\n",
-                         strategy_name[i].c_str(), (int) temp.size());
+                         strategy_name[filterstrategies[i]].c_str(), (int) temp.size());
               }
               if (bestsize == 0 || temp.size() < bestsize) {
-                  bestStrategy = i;
+                  bestStrategy = filterstrategies[i];
                   bestsize = temp.size();
                   (*resultpng).swap(temp);  // Store best result so far in the output.
               }
